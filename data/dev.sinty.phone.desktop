@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Phone
+Comment=Make and receive calls with the built-in modem
+Exec=singularity-phone %U
+Icon=dev.sinty.phone
+Terminal=false
+Type=Application
+Categories=Network;Telephony;
+Keywords=phone;call;dial;dialer;keypad;telephone;
+MimeType=x-scheme-handler/tel;
+StartupWMClass=dev.sinty.phone
