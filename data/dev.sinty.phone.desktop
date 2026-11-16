@@ -6,6 +6,7 @@ Icon=dev.sinty.phone
 Terminal=false
 Type=Application
 Categories=Network;Telephony;
+X-Sinty-FormFactors=desktop;tablet;phone
 Keywords=phone;call;dial;dialer;keypad;telephone;
 MimeType=x-scheme-handler/tel;
 StartupWMClass=dev.sinty.phone
