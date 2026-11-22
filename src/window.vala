@@ -482,7 +482,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.dial.end (res);
                 } catch (Error e) {
-                    show_toast (e.message);
+                    show_toast (Singularity.ModemError.describe (e));
                 }
             });
         }
@@ -494,7 +494,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.hang_up.end (res);
                 } catch (Error e) {
-                    show_toast (e.message);
+                    show_toast (Singularity.ModemError.describe (e));
                 }
             });
         }
@@ -505,7 +505,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.accept.end (res);
                 } catch (Error e) {
-                    show_toast (e.message);
+                    show_toast (Singularity.ModemError.describe (e));
                 }
             });
         }
@@ -517,7 +517,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.send_tone.end (res);
                 } catch (Error e) {
-                    show_toast (e.message);
+                    show_toast (Singularity.ModemError.describe (e));
                 }
             });
         }
