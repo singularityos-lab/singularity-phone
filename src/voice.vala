@@ -22,6 +22,8 @@ namespace Singularity.Apps.Phone {
         public CallState state { get; set; default = CallState.UNKNOWN; }
         public int64 started { get; set; default = 0; }
         public int64 answered { get; set; default = 0; }
+        public bool can_mute { get; set; default = false; }
+        public bool muted { get; set; default = false; }
 
         public Call (string path) {
             Object (path: path);
@@ -33,6 +35,7 @@ namespace Singularity.Apps.Phone {
         public const string ROOT = "/org/freedesktop/ModemManager1";
         public const string VOICE = "org.freedesktop.ModemManager1.Modem.Voice";
         public const string CALL = "org.freedesktop.ModemManager1.Call";
+        public const string MUTE = "dev.sinty.Modem1.Call";
 
         private static Voice? instance = null;
         private DBusConnection? bus = null;
@@ -119,11 +122,25 @@ namespace Singularity.Apps.Phone {
             } catch (Error e) {
                 return null;
             }
+            yield read_mute (call);
             if (calls.has_key (path)) return calls[path];
             if (!call.state.is_live () && !(created && call.state == CallState.UNKNOWN)) return null;
             calls[path] = call;
             call_added (call);
             return call;
+        }
+
+        private async void read_mute (Call call) {
+            try {
+                var reply = yield bus.call (NAME, call.path, "org.freedesktop.DBus.Properties", "Get", new Variant ("(ss)", MUTE, "Muted"),
+                    new VariantType ("(v)"), DBusCallFlags.NONE, -1);
+                var value = reply.get_child_value (0).get_variant ();
+                if (!value.is_of_type (VariantType.BOOLEAN)) return;
+                call.muted = value.get_boolean ();
+                call.can_mute = true;
+            } catch (Error e) {
+                call.can_mute = false;
+            }
         }
 
         private async void invoke (string path, string iface, string method, Variant? args, string reply = "()") throws Error {
@@ -149,6 +166,12 @@ namespace Singularity.Apps.Phone {
 
         public async void hang_up (Call call) throws Error {
             yield invoke (call.path, CALL, "Hangup", null);
+        }
+
+        public async void set_mute (Call call, bool on) throws Error {
+            yield invoke (call.path, MUTE, "SetMute", new Variant ("(b)", on));
+            call.muted = on;
+            call_changed (call);
         }
 
         public async void send_tone (Call call, string tone) throws Error {

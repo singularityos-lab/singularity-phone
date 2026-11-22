@@ -10,10 +10,9 @@ namespace Singularity.Apps.Phone {
 
         public Keypad () {
             Object (orientation: Orientation.VERTICAL, spacing: 0);
-            add_css_class ("osk");
             add_css_class ("phone-keypad");
-            halign = Align.CENTER;
             var grid = new Grid ();
+            grid.hexpand = true;
             grid.row_spacing = 8;
             grid.column_spacing = 8;
             grid.row_homogeneous = true;

@@ -167,21 +167,14 @@ namespace Singularity.Apps.Phone {
         }
 
         private const string CSS = """
-.phone-display { font-size: 2em; font-weight: 300; min-height: 48px; }
-.osk.phone-keypad { background-color: transparent; background-image: none; border: none; box-shadow: none; border-radius: 0; padding: 0; }
-.phone-keypad button.phone-key { min-width: 76px; min-height: 60px; padding: 4px 0; }
-.phone-key-digit { font-size: 1.5em; }
-.phone-key-letters { font-size: 0.62em; letter-spacing: 0.12em; opacity: 0.6; min-height: 1em; }
-button.phone-call { min-width: 64px; min-height: 64px; border-radius: 999px; padding: 0; }
-button.phone-call image { -gtk-icon-size: 24px; }
-.phone-call-number { font-size: 1.8em; font-weight: 300; }
-.phone-call-status { font-size: 1.1em; font-feature-settings: "tnum"; }
-.phone-call-avatar { opacity: 0.55; }
-.phone-tones { font-size: 1.3em; letter-spacing: 0.1em; min-height: 1.3em; }
-.phone-recents { background: transparent; }
-.phone-recents row { border-radius: 10px; margin: 1px 6px; }
+.singularity-app:not(.ssd-mode) .phone-pages > * { padding-top: 44px; }
+.phone-display { font-size: 48px; font-weight: 300; padding: 12px 20px; font-feature-settings: "tnum"; }
+.phone-display.long { font-size: 34px; }
+.phone-keypad button.phone-key { min-height: 68px; padding: 0; }
+.phone-key-digit { font-size: 30px; }
+.phone-key-letters { font-size: 12px; letter-spacing: 0.12em; opacity: 0.6; min-height: 14px; }
+.phone-call-status { font-feature-settings: "tnum"; }
 .phone-recent { padding: 10px 14px; }
-.phone-nav-count { font-size: 0.8em; padding: 0 7px; border-radius: 999px; background-color: @error_color; color: white; }
 """;
     }
 

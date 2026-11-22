@@ -4,13 +4,12 @@ using Singularity.Widgets;
 namespace Singularity.Apps.Phone {
 
     public class PhoneWindow : Singularity.Widgets.Window {
+        private const int ACTION_HEIGHT = 56;
         private PhoneApp app;
         private Voice voice;
         private Stack main_stack;
         private Stack page_stack;
-        private Box sidebar_box;
-        private Gee.HashMap<string, SidebarRow> nav_rows = new Gee.HashMap<string, SidebarRow> ();
-        private Label missed_count;
+        private BubbleSwitcher switcher;
         private string page = "keypad";
         private Label number_label;
         private Button erase;
@@ -19,13 +18,17 @@ namespace Singularity.Apps.Phone {
         private Stack recents_stack;
         private Label call_number;
         private Label call_status;
-        private Box call_actions;
-        private Box answer_actions;
+        private Widget call_actions;
+        private Widget answer_actions;
+        private Button tones_button;
+        private Button mute_button;
         private Revealer tones_revealer;
         private Label tones_label;
         private Call? current = null;
         private uint tick_id = 0;
         private Singularity.Widgets.Toast? last_toast = null;
+        private ToastOverlay keypad_toasts;
+        private ToastOverlay call_toasts;
         private ulong[] handlers = {};
         private ulong log_handler = 0;
 
@@ -34,22 +37,7 @@ namespace Singularity.Apps.Phone {
             this.app = app;
             voice = Voice.get_default ();
             set_title (_("Phone"));
-            set_default_size (760, 640);
-
-            var sidebar = new AppSidebar (200);
-            sidebar_box = new Box (Orientation.VERTICAL, 2);
-            sidebar_box.valign = Align.START;
-            sidebar.box.append (sidebar_box);
-            sidebar_box.append (nav_row ("keypad", "dev.sinty.phone-keypad-symbolic", _("Keypad")));
-            sidebar_box.append (nav_row ("recents", "document-open-recent-symbolic", _("Recents")));
-            var missed = nav_row ("missed", "call-missed-symbolic", _("Missed"));
-            missed_count = new Label ("");
-            missed_count.add_css_class ("phone-nav-count");
-            missed_count.visible = false;
-            var inner = missed.get_child () as Box;
-            if (inner != null) inner.append (missed_count);
-            sidebar_box.append (missed);
-            set_sidebar (sidebar);
+            set_default_size (400, 780);
 
             page_stack = new Stack ();
             page_stack.transition_type = StackTransitionType.CROSSFADE;
@@ -62,6 +50,17 @@ namespace Singularity.Apps.Phone {
             main_stack.add_named (page_stack, "main");
             main_stack.add_named (build_call (), "call");
             set_content (main_stack);
+
+            switcher = new BubbleSwitcher ();
+            switcher.add_option ("keypad", _("Keypad"));
+            switcher.add_option ("recents", _("Recents"));
+            switcher.add_option ("missed", _("Missed"));
+            switcher.selected.connect ((id) => show_page (id));
+            add_bubble_widget (switcher);
+            main_stack.notify["visible-child-name"].connect (() => {
+                switcher.visible = main_stack.visible_child_name == "main";
+            });
+            page_stack.add_css_class ("phone-pages");
 
             var keys = new EventControllerKey ();
             keys.key_pressed.connect (on_key);
@@ -79,17 +78,12 @@ namespace Singularity.Apps.Phone {
             update_start ();
         }
 
-        private SidebarRow nav_row (string id, string icon, string label) {
-            var row = new SidebarRow (icon, label);
-            row.clicked.connect (() => show_page (id));
-            nav_rows[id] = row;
-            row.set_active (id == page);
-            return row;
-        }
-
         public void show_page (string id) {
+            if (switcher.active_option != id) {
+                switcher.set_active (id);
+                return;
+            }
             page = id;
-            foreach (var e in nav_rows.entries) e.value.set_active (e.key == id);
             page_stack.visible_child_name = id == "keypad" ? "keypad" : "recents";
             if (id != "keypad") {
                 rebuild_recents ();
@@ -107,55 +101,68 @@ namespace Singularity.Apps.Phone {
         }
 
         private Widget build_keypad () {
-            var box = new Box (Orientation.VERTICAL, 18);
-            box.valign = Align.CENTER;
-            box.halign = Align.CENTER;
-            box.margin_top = box.margin_bottom = 24;
-            box.margin_start = box.margin_end = 24;
+            var box = new Box (Orientation.VERTICAL, 0);
 
-            var head = new Box (Orientation.HORIZONTAL, 6);
             number_label = new Label ("");
             number_label.add_css_class ("phone-display");
-            number_label.hexpand = true;
+            number_label.vexpand = true;
             number_label.ellipsize = Pango.EllipsizeMode.START;
             number_label.selectable = true;
-            number_label.width_chars = 12;
-            var spacer = new Box (Orientation.HORIZONTAL, 0);
-            spacer.set_size_request (36, -1);
-            erase = new Button.from_icon_name ("edit-clear-symbolic");
-            erase.add_css_class ("flat");
-            erase.tooltip_text = _("Delete");
-            erase.valign = Align.CENTER;
-            erase.clicked.connect (() => backspace ());
-            var hold = new GestureLongPress ();
-            hold.pressed.connect (() => set_number (""));
-            erase.add_controller (hold);
-            head.append (spacer);
-            head.append (number_label);
-            head.append (erase);
-            box.append (head);
+            number_label.focusable = false;
+            keypad_toasts = new ToastOverlay ();
+            keypad_toasts.vexpand = true;
+            keypad_toasts.child = number_label;
+            box.append (keypad_toasts);
 
+            var keys = new Box (Orientation.VERTICAL, 8);
             var pad = new Keypad ();
             pad.pressed.connect ((k) => {
                 if (k == "+" && number_label.label.has_suffix ("0")) set_number (number_label.label.substring (0, number_label.label.length - 1) + "+");
                 else set_number (number_label.label + k);
             });
-            box.append (pad);
+            keys.append (pad);
 
-            call_button = new Button.from_icon_name ("call-start-symbolic");
-            call_button.add_css_class ("phone-call");
-            call_button.add_css_class ("suggested-action");
-            call_button.halign = Align.CENTER;
-            call_button.tooltip_text = _("Call");
-            call_button.update_property (AccessibleProperty.LABEL, _("Call"), -1);
+            var actions = new Grid ();
+            actions.column_homogeneous = true;
+            actions.column_spacing = 8;
+            actions.attach (new Box (Orientation.HORIZONTAL, 0), 0, 0);
+            call_button = action_button ("call-start-symbolic", _("Call"), "suggested-action");
             call_button.clicked.connect (() => dial (number_label.label));
-            box.append (call_button);
+            actions.attach (call_button, 1, 0);
+            erase = new Button.from_icon_name ("edit-clear-symbolic");
+            erase.add_css_class ("osk-key");
+            erase.add_css_class ("osk-key-special");
+            erase.focus_on_click = false;
+            erase.tooltip_text = _("Delete");
+            erase.update_property (AccessibleProperty.LABEL, _("Delete"), -1);
+            erase.clicked.connect (() => backspace ());
+            var hold = new GestureLongPress ();
+            hold.pressed.connect (() => {
+                hold.set_state (EventSequenceState.CLAIMED);
+                set_number ("");
+            });
+            erase.add_controller (hold);
+            actions.attach (erase, 2, 0);
+            keys.append (actions);
+
+            box.append (key_panel (keys));
             set_number ("");
             return box;
         }
 
+        private Widget key_panel (Widget keys) {
+            var panel = new Box (Orientation.VERTICAL, 0);
+            panel.add_css_class ("osk");
+            var clamp = new Clamp (keys, 420);
+            clamp.hexpand = true;
+            panel.append (clamp);
+            return panel;
+        }
+
         private void set_number (string text) {
             number_label.label = text;
+            if (text.char_count () > 13) number_label.add_css_class ("long");
+            else number_label.remove_css_class ("long");
             erase.opacity = text == "" ? 0 : 1;
             erase.sensitive = text != "";
         }
@@ -178,6 +185,7 @@ namespace Singularity.Apps.Phone {
             bool dial_key = c.isdigit () || c == '*' || c == '#' || c == '+';
             if (main_stack.visible_child_name == "call") {
                 if (dial_key && current != null && current.state == CallState.ACTIVE) {
+                    show_tones (true);
                     send_tone (c.to_string ());
                     return true;
                 }
@@ -207,8 +215,10 @@ namespace Singularity.Apps.Phone {
 
         private Widget build_recents () {
             recents = new ListBox ();
-            recents.add_css_class ("phone-recents");
-            recents.margin_top = recents.margin_bottom = 6;
+            recents.add_css_class ("boxed-list");
+            recents.valign = Align.START;
+            recents.margin_top = recents.margin_bottom = 12;
+            recents.margin_start = recents.margin_end = 12;
             recents.selection_mode = SelectionMode.NONE;
             recents.activate_on_single_click = true;
             recents.update_property (AccessibleProperty.LABEL, _("Recent Calls"), -1);
@@ -219,7 +229,7 @@ namespace Singularity.Apps.Phone {
             var scroll = new ScrolledWindow ();
             scroll.hscrollbar_policy = PolicyType.NEVER;
             scroll.vexpand = true;
-            scroll.child = recents;
+            scroll.child = new Clamp (recents);
             var empty = new StatusPage ();
             empty.icon_name = "document-open-recent-symbolic";
             empty.title = _("No Calls");
@@ -260,6 +270,7 @@ namespace Singularity.Apps.Phone {
             var text = new Box (Orientation.VERTICAL, 2);
             text.hexpand = true;
             var name = new Label (e.number);
+            name.add_css_class ("title-3");
             name.xalign = 0;
             name.ellipsize = Pango.EllipsizeMode.END;
             if (e.missed) name.add_css_class ("error");
@@ -319,91 +330,115 @@ namespace Singularity.Apps.Phone {
         }
 
         private Widget build_call () {
-            var box = new Box (Orientation.VERTICAL, 12);
-            box.add_css_class ("phone-call-page");
-            box.valign = Align.CENTER;
-            box.halign = Align.CENTER;
-            box.margin_start = box.margin_end = 24;
+            var box = new Box (Orientation.VERTICAL, 0);
 
-            var avatar = new Image.from_icon_name ("avatar-default-symbolic");
-            avatar.pixel_size = 64;
-            avatar.add_css_class ("phone-call-avatar");
-            box.append (avatar);
-            call_number = new Label ("");
-            call_number.add_css_class ("phone-call-number");
-            call_number.ellipsize = Pango.EllipsizeMode.START;
-            box.append (call_number);
+            var head = new Box (Orientation.VERTICAL, 12);
+            head.vexpand = true;
+            head.valign = Align.CENTER;
             call_status = new Label ("");
-            call_status.add_css_class ("dim-label");
+            call_status.add_css_class ("title-4");
             call_status.add_css_class ("phone-call-status");
-            box.append (call_status);
+            head.append (call_status);
+            call_number = new Label ("");
+            call_number.add_css_class ("phone-display");
+            call_number.ellipsize = Pango.EllipsizeMode.START;
+            head.append (call_number);
+            call_toasts = new ToastOverlay ();
+            call_toasts.vexpand = true;
+            call_toasts.child = head;
+            box.append (call_toasts);
 
+            var actions = new Box (Orientation.VERTICAL, 12);
+            var row = new Box (Orientation.HORIZONTAL, 12);
+            row.homogeneous = true;
+            tones_button = action_button ("dev.sinty.phone-keypad-symbolic", _("Keypad"));
+            tones_button.clicked.connect (() => show_tones (!tones_revealer.reveal_child));
+            row.append (tones_button);
+            mute_button = action_button ("microphone-sensitivity-muted-symbolic", _("Mute"));
+            mute_button.clicked.connect (() => toggle_mute ());
+            row.append (mute_button);
+            actions.append (row);
+            var end = action_button ("call-stop-symbolic", _("End Call"), "destructive-action");
+            end.clicked.connect (() => hang_up ());
+            actions.append (end);
+            call_actions = action_area (actions);
+            box.append (call_actions);
+
+            var answers = new Box (Orientation.HORIZONTAL, 12);
+            answers.homogeneous = true;
+            var decline = action_button ("call-stop-symbolic", _("Decline"), "destructive-action");
+            decline.clicked.connect (() => hang_up ());
+            answers.append (decline);
+            var accept = action_button ("call-start-symbolic", _("Accept"), "suggested-action");
+            accept.clicked.connect (() => accept_call ());
+            answers.append (accept);
+            answer_actions = action_area (answers);
+            box.append (answer_actions);
+
+            var tones = new Box (Orientation.VERTICAL, 8);
             tones_label = new Label ("");
-            tones_label.add_css_class ("phone-tones");
-            var tones = new Box (Orientation.VERTICAL, 12);
-            tones.margin_top = 12;
+            tones_label.add_css_class ("title-1");
+            tones_label.ellipsize = Pango.EllipsizeMode.START;
             tones.append (tones_label);
             var pad = new Keypad ();
             pad.pressed.connect ((k) => send_tone (k));
             tones.append (pad);
             tones_revealer = new Revealer ();
-            tones_revealer.transition_type = RevealerTransitionType.SLIDE_DOWN;
-            tones_revealer.child = tones;
+            tones_revealer.transition_type = RevealerTransitionType.SLIDE_UP;
+            tones_revealer.child = key_panel (tones);
             box.append (tones_revealer);
-
-            call_actions = new Box (Orientation.HORIZONTAL, 24);
-            call_actions.halign = Align.CENTER;
-            call_actions.margin_top = 24;
-            var keypad = round_button ("dev.sinty.phone-keypad-symbolic", _("Keypad"), null);
-            keypad.clicked.connect (() => tones_revealer.reveal_child = !tones_revealer.reveal_child);
-            call_actions.append (round_wrap (keypad, _("Keypad")));
-            var end = round_button ("call-stop-symbolic", _("End Call"), "destructive-action");
-            end.clicked.connect (() => hang_up ());
-            call_actions.append (round_wrap (end, _("End Call")));
-            box.append (call_actions);
-
-            answer_actions = new Box (Orientation.HORIZONTAL, 48);
-            answer_actions.halign = Align.CENTER;
-            answer_actions.margin_top = 24;
-            var decline = round_button ("call-stop-symbolic", _("Decline"), "destructive-action");
-            decline.clicked.connect (() => hang_up ());
-            answer_actions.append (round_wrap (decline, _("Decline")));
-            var accept = round_button ("call-start-symbolic", _("Accept"), "suggested-action");
-            accept.clicked.connect (() => accept_call ());
-            answer_actions.append (round_wrap (accept, _("Accept")));
-            box.append (answer_actions);
             return box;
         }
 
-        private Widget round_wrap (Button b, string label) {
-            var box = new Box (Orientation.VERTICAL, 6);
-            box.append (b);
-            var l = new Label (label);
-            l.add_css_class ("caption");
-            l.add_css_class ("dim-label");
-            box.append (l);
-            return box;
+        private Widget action_area (Widget actions) {
+            var clamp = new Clamp (actions, 420);
+            clamp.margin_top = 12;
+            clamp.margin_bottom = 24;
+            clamp.margin_start = clamp.margin_end = 16;
+            return clamp;
         }
 
-        private Button round_button (string icon, string label, string? style) {
-            var b = new Button.from_icon_name (icon);
-            b.add_css_class ("phone-call");
+        private Button action_button (string icon, string label, string? style = null) {
+            var content = new Box (Orientation.HORIZONTAL, 8);
+            content.halign = Align.CENTER;
+            content.append (new Image.from_icon_name (icon));
+            content.append (new Label (label));
+            var b = new Button ();
+            b.child = content;
+            b.set_size_request (-1, ACTION_HEIGHT);
+            b.add_css_class ("pill");
             if (style != null) b.add_css_class (style);
-            b.tooltip_text = label;
             b.update_property (AccessibleProperty.LABEL, label, -1);
             return b;
+        }
+
+        private void show_tones (bool shown) {
+            tones_revealer.reveal_child = shown;
+            if (shown) tones_button.add_css_class ("suggested-action");
+            else tones_button.remove_css_class ("suggested-action");
+        }
+
+        private void toggle_mute () {
+            if (current == null) return;
+            var call = current;
+            voice.set_mute.begin (call, !call.muted, (o, res) => {
+                try {
+                    voice.set_mute.end (res);
+                } catch (Error e) {
+                    show_error (e);
+                }
+            });
         }
 
         private void update_start () {
             if (current != null) return;
             main_stack.visible_child_name = voice.available ? "main" : "welcome";
-            set_sidebar_visible (voice.available);
+            switcher.visible = voice.available;
         }
 
         private void update_missed () {
             int n = app.unseen_missed ();
-            missed_count.label = n.to_string ();
-            missed_count.visible = n > 0;
+            switcher.set_option_label ("missed", n > 0 ? _("Missed (%d)").printf (n) : _("Missed"));
         }
 
         private void on_call (Call call) {
@@ -417,14 +452,19 @@ namespace Singularity.Apps.Phone {
             bool ringing = call.state == CallState.RINGING_IN || call.state == CallState.WAITING;
             answer_actions.visible = ringing;
             call_actions.visible = !ringing;
-            if (call.state != CallState.ACTIVE) tones_revealer.reveal_child = false;
+            bool active = call.state == CallState.ACTIVE;
+            if (!active) show_tones (false);
+            tones_button.sensitive = active;
+            mute_button.sensitive = active;
+            mute_button.visible = call.can_mute;
+            if (call.muted) mute_button.add_css_class ("suggested-action");
+            else mute_button.remove_css_class ("suggested-action");
             update_status ();
             if (tick_id == 0) tick_id = Timeout.add_seconds (1, () => {
                 update_status ();
                 return Source.CONTINUE;
             });
             main_stack.visible_child_name = "call";
-            set_sidebar_visible (false);
             if (ringing) present ();
         }
 
@@ -456,7 +496,7 @@ namespace Singularity.Apps.Phone {
         private void finish () {
             current = null;
             tones_label.label = "";
-            tones_revealer.reveal_child = false;
+            show_tones (false);
             if (tick_id != 0) {
                 Source.remove (tick_id);
                 tick_id = 0;
@@ -533,7 +573,9 @@ namespace Singularity.Apps.Phone {
         private void present_toast (Singularity.Widgets.Toast toast) {
             if (last_toast != null) last_toast.dismiss ();
             last_toast = toast;
-            add_toast (last_toast);
+            if (main_stack.visible_child_name == "call") call_toasts.add_toast (toast);
+            else if (main_stack.visible_child_name == "main" && page == "keypad") keypad_toasts.add_toast (toast);
+            else add_toast (toast);
         }
 
         public override bool close_request () {
