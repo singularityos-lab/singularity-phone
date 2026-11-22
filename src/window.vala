@@ -482,7 +482,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.dial.end (res);
                 } catch (Error e) {
-                    show_toast (Singularity.ModemError.describe (e));
+                    show_error (e);
                 }
             });
         }
@@ -494,7 +494,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.hang_up.end (res);
                 } catch (Error e) {
-                    show_toast (Singularity.ModemError.describe (e));
+                    show_error (e);
                 }
             });
         }
@@ -505,7 +505,7 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.accept.end (res);
                 } catch (Error e) {
-                    show_toast (Singularity.ModemError.describe (e));
+                    show_error (e);
                 }
             });
         }
@@ -517,14 +517,22 @@ namespace Singularity.Apps.Phone {
                 try {
                     voice.send_tone.end (res);
                 } catch (Error e) {
-                    show_toast (Singularity.ModemError.describe (e));
+                    show_error (e);
                 }
             });
         }
 
         public void show_toast (string text) {
+            present_toast (new Singularity.Widgets.Toast (text));
+        }
+
+        private void show_error (Error e) {
+            present_toast (Singularity.ModemError.toast (e));
+        }
+
+        private void present_toast (Singularity.Widgets.Toast toast) {
             if (last_toast != null) last_toast.dismiss ();
-            last_toast = new Singularity.Widgets.Toast (text);
+            last_toast = toast;
             add_toast (last_toast);
         }
 
