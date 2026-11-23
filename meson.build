@@ -33,6 +33,7 @@ executable('singularity-phone',
     'src/keypad.vala',
     'src/window.vala',
     'src/app.vala',
+    'src/hub_bridge.vala',
   ),
   dependencies: deps,
   install: true

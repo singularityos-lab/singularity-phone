@@ -26,6 +26,7 @@ namespace Singularity.Apps.Phone {
         private PhoneWindow? win = null;
         private uint bus_id = 0;
         private int64 missed_seen = 0;
+        private HubBridge? hub = null;
 
         public PhoneApp () {
             Object (application_id: "dev.sinty.phone", flags: ApplicationFlags.HANDLES_OPEN);
@@ -65,6 +66,7 @@ namespace Singularity.Apps.Phone {
                 if (call.incoming && call.answered == 0 && (win == null || !win.is_active)) notify_missed (call);
             });
             voice.start.begin ();
+            hub = new HubBridge (this);
         }
 
         protected override void activate () {
