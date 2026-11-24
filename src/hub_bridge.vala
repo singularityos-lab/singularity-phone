@@ -102,7 +102,7 @@ namespace Singularity.Apps.Phone {
                     if (e != null && e.number != "") app.message (e.number);
                     break;
                 case "open":
-                    app.activate ();
+                    app.show_window ();
                     break;
                 default:
                     return;

@@ -21,7 +21,7 @@ namespace Singularity.Apps.Phone {
         }
     }
 
-    public class PhoneApp : Singularity.Application, Singularity.Migration.Migratable {
+    public class PhoneApp : Singularity.Application, Singularity.Migration.Migratable, Singularity.Startup.Bootable {
         public CallLog log;
         private PhoneWindow? win = null;
         private uint bus_id = 0;
@@ -69,11 +69,42 @@ namespace Singularity.Apps.Phone {
             hub = new HubBridge (this);
         }
 
-        protected override void activate () {
+        public Singularity.Startup.Plan build_plan (Singularity.Startup.Request request) {
+            var plan = new Singularity.Startup.Plan ();
+            plan.version = "phone-1";
+            if (request.kind == Singularity.Startup.RequestKind.SERVICE) {
+                plan.main ("ready", Singularity.Startup.Category.PREPARE, (c) => {})
+                    .reaches (Singularity.Startup.Milestone.SHELL_READY)
+                    .reaches (Singularity.Startup.Milestone.CONTENT_READY)
+                    .reaches (Singularity.Startup.Milestone.INTERACTIVE);
+                return plan;
+            }
+            var window = plan.main ("window", Singularity.Startup.Category.SHELL, (c) => {
+                show_window ();
+                c.window = win;
+            }).reaches (Singularity.Startup.Milestone.SHELL_READY);
+            if (request.kind == Singularity.Startup.RequestKind.OPEN) {
+                var files = request.files ();
+                plan.main ("open-file", Singularity.Startup.Category.CONTENT, (c) => open_files (files))
+                    .depends_on ("window")
+                    .reaches (Singularity.Startup.Milestone.CONTENT_READY)
+                    .reaches (Singularity.Startup.Milestone.INTERACTIVE);
+            } else {
+                window.reaches (Singularity.Startup.Milestone.CONTENT_READY).reaches (Singularity.Startup.Milestone.INTERACTIVE);
+            }
+            return plan;
+        }
+
+        public void handle_request (Singularity.Startup.Request request) {
+            if (request.kind == Singularity.Startup.RequestKind.OPEN) open_files (request.files ());
+            else show_window ();
+        }
+
+        public void show_window () {
             window ().present ();
         }
 
-        protected override void open (File[] files, string hint) {
+        private void open_files (File[] files) {
             var w = window ();
             w.present ();
             foreach (var f in files) {
