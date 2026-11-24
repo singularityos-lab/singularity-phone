@@ -588,6 +588,24 @@ namespace Singularity.Apps.Phone {
             return base.close_request ();
         }
 
+        public void prepare_move () throws Singularity.Migration.MigrationError {
+            if (current != null) throw new Singularity.Migration.MigrationError.UNSUPPORTED (_("Calls stay on this device until they end"));
+        }
+
+        public Variant save_migration () {
+            var d = new VariantDict ();
+            d.insert_value ("page", new Variant.string (page));
+            d.insert_value ("number", new Variant.string (number_label.label));
+            return d.end ();
+        }
+
+        public void restore_migration (Variant data) {
+            var d = new VariantDict (data);
+            string wanted = (d.lookup_value ("page", VariantType.STRING) ?? new Variant.string ("keypad")).get_string ();
+            if (wanted in new string[] { "keypad", "recents", "missed" }) show_page (wanted);
+            set_number ((d.lookup_value ("number", VariantType.STRING) ?? new Variant.string ("")).get_string ());
+        }
+
         public void prefill (string number) {
             if (current != null) return;
             show_page ("keypad");

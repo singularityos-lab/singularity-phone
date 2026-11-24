@@ -21,7 +21,7 @@ namespace Singularity.Apps.Phone {
         }
     }
 
-    public class PhoneApp : Singularity.Application {
+    public class PhoneApp : Singularity.Application, Singularity.Migration.Migratable {
         public CallLog log;
         private PhoneWindow? win = null;
         private uint bus_id = 0;
@@ -98,14 +98,44 @@ namespace Singularity.Apps.Phone {
         }
 
         public PhoneWindow window () {
-            if (win == null) {
-                win = new PhoneWindow (this);
-                win.close_request.connect (() => {
-                    win = null;
-                    return false;
-                });
-            }
+            if (win == null) adopt (new PhoneWindow (this));
             return win;
+        }
+
+        private void adopt (PhoneWindow w) {
+            win = w;
+            w.close_request.connect (() => {
+                if (win == w) win = null;
+                return false;
+            });
+        }
+
+        public void prepare_move () throws Singularity.Migration.MigrationError {
+            if (win != null) win.prepare_move ();
+        }
+
+        public Variant save_model () {
+            return new VariantDict ().end ();
+        }
+
+        public async void restore_model (Variant model) throws Error {
+        }
+
+        public string window_kind (Gtk.Window w) {
+            return (w is PhoneWindow) ? "phone" : "";
+        }
+
+        public Variant save_window (Gtk.Window w) {
+            return ((PhoneWindow) w).save_migration ();
+        }
+
+        public async Gtk.Window? rebuild_window (string kind, Variant data) throws Error {
+            if (kind != "phone") return null;
+            if (win != null) win.close ();
+            var w = new PhoneWindow (this);
+            adopt (w);
+            w.restore_migration (data);
+            return w;
         }
 
         private void notify_incoming (Call call) {
