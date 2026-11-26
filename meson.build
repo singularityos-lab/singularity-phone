@@ -34,6 +34,7 @@ executable('singularity-phone',
     'src/window.vala',
     'src/app.vala',
     'src/hub_bridge.vala',
+    'src/agent_intents.vala',
   ),
   dependencies: deps,
   install: true

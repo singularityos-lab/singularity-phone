@@ -26,6 +26,10 @@ namespace Singularity.Apps.Phone {
         private PhoneWindow? win = null;
         private uint bus_id = 0;
         private int64 missed_seen = 0;
+
+        public int64 missed_seen_at () {
+            return missed_seen;
+        }
         private HubBridge? hub = null;
 
         public PhoneApp () {
@@ -67,6 +71,7 @@ namespace Singularity.Apps.Phone {
             });
             voice.start.begin ();
             hub = new HubBridge (this);
+            PhoneIntents.install (this);
         }
 
         public Singularity.Startup.Plan build_plan (Singularity.Startup.Request request) {
