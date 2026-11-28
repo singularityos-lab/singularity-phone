@@ -1,3 +1,4 @@
+using Singularity.Telephony;
 namespace Singularity.Apps.Phone {
 
     public class LogEntry : Object {

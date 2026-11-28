@@ -1,4 +1,5 @@
 using Singularity.Apps.Phone;
+using Singularity.Telephony;
 
 void test_log () {
     var log = new CallLog ();

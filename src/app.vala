@@ -1,3 +1,4 @@
+using Singularity.Telephony;
 using Gtk;
 
 namespace Singularity.Apps.Phone {

@@ -15,16 +15,23 @@ json_dep = dependency('json-glib-1.0')
 libsingularity_dep = dependency('singularity-1.0',
   fallback: ['libsingularity', 'libsingularity_dep']
 )
+system_dep = dependency('singularity-system-1.0',
+  fallback: ['libsingularity', 'libsingularity_system_dep']
+)
 
 if not meson.is_subproject() and libsingularity_dep.type_name() == 'internal'
   libsingularity_vapi_dir = join_paths(meson.project_build_root(), 'subprojects', 'libsingularity')
   add_project_arguments(['--vapidir=' + libsingularity_vapi_dir], language: 'vala')
 endif
 
-deps = [gtk_dep, gee_dep, gio_dep, json_dep, libsingularity_dep]
+if system_dep.type_name() == 'internal'
+  system_vapi_dir = join_paths(meson.current_source_dir(), 'subprojects', 'libsingularity', 'src', 'vapi')
+  add_project_arguments(['--vapidir=' + system_vapi_dir], language: 'vala')
+endif
+
+deps = [gtk_dep, gee_dep, gio_dep, json_dep, libsingularity_dep, system_dep]
 
 core = files(
-  'src/voice.vala',
   'src/call_log.vala',
 )
 
